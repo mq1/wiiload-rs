@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use flate2::{Compression, write::DeflateEncoder};
+use flate2::{Compression, write::ZlibEncoder};
 use std::{
     io::{BufWriter, Write},
     net::{Ipv4Addr, SocketAddr, TcpStream},
@@ -11,7 +11,7 @@ use thiserror::Error;
 
 const WIILOAD_PORT: u16 = 4299;
 const WIILOAD_MAGIC: &[u8] = b"HAXX";
-const WIILOAD_VERSION: [u8; 2] = [0, 5];
+const WIILOAD_VERSION: [u8; 3] = [0, 5, 0];
 const WIILOAD_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Error, Debug)]
@@ -81,7 +81,7 @@ pub fn compress_then_send(
 ) -> Result<(), WiiloadError> {
     let uncompressed_size = body.len().try_into()?;
 
-    let mut e = DeflateEncoder::new(Vec::new(), Compression::best());
+    let mut e = ZlibEncoder::new(Vec::new(), Compression::best());
     e.write_all(body)?;
     let compressed_body = e.finish()?;
 

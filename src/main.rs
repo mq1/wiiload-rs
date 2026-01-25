@@ -44,16 +44,20 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
 #[cfg(feature = "cli")]
 fn main() -> Result<(), lexopt::Error> {
-    use std::fs;
+    use std::{fs, path::Path};
 
     let args = parse_args()?;
-    let body = fs::read(&args.file).unwrap();
+    let file_path = Path::new(&args.file);
+    let body = fs::read(file_path).unwrap();
+    let filename = file_path.file_name().unwrap().to_str().unwrap().to_string();
     let wii_ip = args.wii_ip.parse().unwrap();
 
     if args.compress {
-        wiiload::send(args.file, &body, wii_ip).unwrap();
+        println!("Compressing and sending file...");
+        wiiload::compress_then_send(filename, &body, wii_ip).unwrap();
     } else {
-        wiiload::compress_then_send(args.file, &body, wii_ip).unwrap();
+        println!("Sending file...");
+        wiiload::send(filename, &body, wii_ip).unwrap();
     }
 
     Ok(())
