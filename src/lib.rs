@@ -70,10 +70,39 @@ fn push(
     Ok(())
 }
 
+/// Sends a file to the Wii without applying any compression.
+///
+/// # Arguments
+/// * `filename` - The name of the file (or command line argument) to send.
+/// * `body` - The raw byte content of the file.
+/// * `wii_ip` - The IPv4 address of the target Wii.
+///
+/// # Errors
+/// Returns a [`WiiloadError`] if:
+/// * The file size exceeds `u32::MAX`.
+/// * The filename length exceeds `u8::MAX`.
+/// * The TCP connection to the Wii cannot be established or times out.
+/// * An I/O error occurs while writing data to the network stream.
 pub fn send(filename: String, body: &[u8], wii_ip: Ipv4Addr) -> Result<(), WiiloadError> {
     push(filename, body, wii_ip, 0)
 }
 
+/// Compresses the file data using Zlib and then sends it to the Wii.
+///
+/// This uses `Compression::best()` to minimize network transfer time.
+///
+/// # Arguments
+/// * `filename` - The name of the file (or command line argument) to send.
+/// * `body` - The raw byte content of the file to be compressed.
+/// * `wii_ip` - The IPv4 address of the target Wii.
+///
+/// # Errors
+/// Returns a [`WiiloadError`] if:
+/// * Zlib compression fails.
+/// * The uncompressed file size exceeds `u32::MAX`.
+/// * The filename length exceeds `u8::MAX`.
+/// * The TCP connection to the Wii cannot be established or times out.
+/// * An I/O error occurs while writing data to the network stream.
 pub fn compress_then_send(
     filename: String,
     body: &[u8],
