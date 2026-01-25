@@ -65,5 +65,5 @@ fn main() -> Result<(), lexopt::Error> {
 
 #[cfg(not(feature = "cli"))]
 fn main() {
-    compile_error!("Please add the `cli` feature to enable the CLI");
+    println!("Please add the `cli` feature to enable the CLI");
 }
