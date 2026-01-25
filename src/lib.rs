@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 use flate2::{Compression, write::ZlibEncoder};
 use std::{
