@@ -16,7 +16,7 @@ cli = ["dep:lexopt"]
 
 [dependencies]
 thiserror = "2.0"
-miniz_oxide = { version = "0.9", optional = true, features = ["std"] }
+miniz_oxide = { version = "0.9", optional = true }
 lexopt = { version = "0.3", optional = true }
 
 [lints.rust]
