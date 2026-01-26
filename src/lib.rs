@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use flate2::{Compression, write::ZlibEncoder};
 use std::{
     io::{BufWriter, Write},
     net::{Ipv4Addr, SocketAddr, TcpStream},
@@ -24,6 +23,8 @@ pub enum WiiloadError {
     Timeout,
     #[error("File too big")]
     TryFromIntError(#[from] std::num::TryFromIntError),
+    #[error("Filename too long")]
+    FileNameTooLong,
 }
 
 fn push(
@@ -38,7 +39,10 @@ fn push(
     }
 
     let compressed_size: u32 = body.len().try_into()?;
-    let filename_len: u8 = filename.len().try_into()?;
+    let filename_len: u8 = filename
+        .len()
+        .try_into()
+        .map_err(|_| WiiloadError::FileNameTooLong)?;
 
     // Parse the address
     let wii_ip = wii_ip.into();
@@ -89,7 +93,7 @@ pub fn send(filename: String, body: &[u8], wii_ip: Ipv4Addr) -> Result<(), Wiilo
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
 ///
-/// This uses `Compression::best()` to minimize network transfer time.
+/// This uses deflate -9 to minimize network transfer time.
 ///
 /// # Arguments
 /// * `filename` - The name of the file (or command line argument) to send.
@@ -98,21 +102,20 @@ pub fn send(filename: String, body: &[u8], wii_ip: Ipv4Addr) -> Result<(), Wiilo
 ///
 /// # Errors
 /// Returns a [`WiiloadError`] if:
-/// * Zlib compression fails.
 /// * The uncompressed file size exceeds `u32::MAX`.
 /// * The filename length exceeds `u8::MAX`.
 /// * The TCP connection to the Wii cannot be established or times out.
 /// * An I/O error occurs while writing data to the network stream.
+#[cfg(feature = "compression")]
 pub fn compress_then_send(
     filename: String,
     body: &[u8],
     wii_ip: Ipv4Addr,
 ) -> Result<(), WiiloadError> {
-    let uncompressed_size = body.len().try_into()?;
+    use miniz_oxide::deflate::compress_to_vec_zlib;
 
-    let mut e = ZlibEncoder::new(Vec::new(), Compression::best());
-    e.write_all(body)?;
-    let compressed_body = e.finish()?;
+    let uncompressed_size = body.len().try_into()?;
+    let compressed_body = compress_to_vec_zlib(body, 9);
 
     push(filename, &compressed_body, wii_ip, uncompressed_size)
 }

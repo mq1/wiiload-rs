@@ -53,10 +53,16 @@ fn main() -> Result<(), lexopt::Error> {
     let wii_ip = args.wii_ip.parse().unwrap();
 
     if args.compress {
-        println!("Compressing and sending file...");
-        wiiload::compress_then_send(filename, &body, wii_ip).unwrap();
+        #[cfg(feature = "compression")]
+        {
+            println!("Compressing and sending file...");
+            wiiload::compress_then_send(filename, &body, wii_ip).unwrap();
+        }
+        #[cfg(not(feature = "compression"))]
+        {
+            println!("Compression not enabled! Please add the `compression` feature to enable it.");
+        }
     } else {
-        println!("Sending file...");
         wiiload::send(filename, &body, wii_ip).unwrap();
     }
 

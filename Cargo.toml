@@ -1,6 +1,6 @@
 [package]
 name = "wiiload"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.92"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -10,13 +10,14 @@ homepage = "https://github.com/mq1/wiiload-rs"
 description = "A minimal wiiload implementation in rust"
 
 [features]
-default = []
+default = ["compression"]
+compression = ["dep:miniz_oxide"]
 cli = ["dep:lexopt"]
 
 [dependencies]
 thiserror = "2.0"
+miniz_oxide = { version = "0.9", optional = true, features = ["std"] }
 lexopt = { version = "0.3", optional = true }
-flate2 = "1.1"
 
 [lints.rust]
 rust_2018_idioms = "deny"
