@@ -28,16 +28,11 @@ pub enum WiiloadError {
 }
 
 fn push(
-    mut filename: String,
+    filename: &str,
     body: &[u8],
-    wii_ip: impl Into<Ipv4Addr>,
+    wii_ip: Ipv4Addr,
     uncompressed_size: u32,
 ) -> Result<(), WiiloadError> {
-    // Filename must end with 0x0
-    if !filename.ends_with('\0') {
-        filename.push('\0');
-    }
-
     let compressed_size: u32 = body.len().try_into()?;
     let filename_len: u8 = filename
         .len()
@@ -45,7 +40,6 @@ fn push(
         .map_err(|_| WiiloadError::FileNameTooLong)?;
 
     // Parse the address
-    let wii_ip = wii_ip.into();
     let wii_addr = SocketAddr::from((wii_ip, WIILOAD_PORT));
 
     // Connect to the Wii via tcp
@@ -68,6 +62,9 @@ fn push(
 
     // Send arguments
     stream.write_all(filename.as_bytes())?;
+    if !filename.ends_with('\0') {
+        stream.write_all(&[0])?;
+    }
 
     stream.flush()?;
 
@@ -77,7 +74,7 @@ fn push(
 /// Sends a file to the Wii without applying any compression.
 ///
 /// # Arguments
-/// * `filename` - The name of the file (or command line argument) to send.
+/// * `filename` - The name of the file to send.
 /// * `body` - The raw byte content of the file.
 /// * `wii_ip` - The IPv4 address of the target Wii.
 ///
@@ -87,8 +84,12 @@ fn push(
 /// * The filename length exceeds `u8::MAX`.
 /// * The TCP connection to the Wii cannot be established or times out.
 /// * An I/O error occurs while writing data to the network stream.
-pub fn send(filename: String, body: &[u8], wii_ip: Ipv4Addr) -> Result<(), WiiloadError> {
-    push(filename, body, wii_ip, 0)
+pub fn send(
+    filename: impl AsRef<str>,
+    body: impl AsRef<[u8]>,
+    wii_ip: impl Into<Ipv4Addr>,
+) -> Result<(), WiiloadError> {
+    push(filename.as_ref(), body.as_ref(), wii_ip.into(), 0)
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
@@ -96,7 +97,7 @@ pub fn send(filename: String, body: &[u8], wii_ip: Ipv4Addr) -> Result<(), Wiilo
 /// This uses deflate -9 to minimize network transfer time.
 ///
 /// # Arguments
-/// * `filename` - The name of the file (or command line argument) to send.
+/// * `filename` - The name of the file to send.
 /// * `body` - The raw byte content of the file to be compressed.
 /// * `wii_ip` - The IPv4 address of the target Wii.
 ///
@@ -108,14 +109,20 @@ pub fn send(filename: String, body: &[u8], wii_ip: Ipv4Addr) -> Result<(), Wiilo
 /// * An I/O error occurs while writing data to the network stream.
 #[cfg(feature = "compression")]
 pub fn compress_then_send(
-    filename: String,
-    body: &[u8],
-    wii_ip: Ipv4Addr,
+    filename: impl AsRef<str>,
+    body: impl AsRef<[u8]>,
+    wii_ip: impl Into<Ipv4Addr>,
 ) -> Result<(), WiiloadError> {
     use miniz_oxide::deflate::compress_to_vec_zlib;
 
+    let body = body.as_ref();
     let uncompressed_size = body.len().try_into()?;
     let compressed_body = compress_to_vec_zlib(body, 9);
 
-    push(filename, &compressed_body, wii_ip, uncompressed_size)
+    push(
+        filename.as_ref(),
+        &compressed_body,
+        wii_ip.into(),
+        uncompressed_size,
+    )
 }

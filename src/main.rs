@@ -44,13 +44,13 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
 #[cfg(feature = "cli")]
 fn main() -> Result<(), lexopt::Error> {
-    use std::{fs, path::Path};
+    use std::{fs, net::Ipv4Addr, path::Path};
 
     let args = parse_args()?;
     let file_path = Path::new(&args.file);
     let body = fs::read(file_path).unwrap();
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_string();
-    let wii_ip = args.wii_ip.parse().unwrap();
+    let wii_ip: Ipv4Addr = args.wii_ip.parse().unwrap();
 
     if args.compress {
         #[cfg(feature = "compression")]
