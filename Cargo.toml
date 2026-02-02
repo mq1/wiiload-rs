@@ -2,7 +2,7 @@
 name = "wiiload"
 version = "0.3.0"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.85"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mq1/wiiload-rs"
@@ -15,7 +15,7 @@ compression = ["dep:miniz_oxide"]
 cli = ["dep:lexopt"]
 
 [dependencies]
-thiserror = "2.0"
+thiserror = "2"
 miniz_oxide = { version = "0.9", optional = true }
 lexopt = { version = "0.3", optional = true }
 

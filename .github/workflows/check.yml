@@ -1,0 +1,29 @@
+name: Check
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  check-all:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+          - runner: macos-latest
+          - runner: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - run: |
+          rustup toolchain install 1.85
+          rustup default 1.85
+          cargo check
+          cargo test
+
