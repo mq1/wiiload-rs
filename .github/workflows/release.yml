@@ -45,17 +45,17 @@ jobs:
           fetch-depth: 1
 
       - name: Install Rust toolchain (windows)
-        if: matrix.runner != "windows-latest"
+        if: matrix.runner != 'windows-latest'
         uses: dtolnay/rust-toolchain@1.94
         with:
           targets: ${{ matrix.target }}
 
       - name: Build binary (ubuntu and macos)
-        if: matrix.runner != "windows-latest"
+        if: matrix.runner != 'windows-latest'
         run: docker run -v $(pwd):/io -w /io ghcr.io/rust-cross/cargo-zigbuild cargo zigbuild --locked --release --target ${{ matrix.target }} --features cli
 
       - name: Build binary (windows)
-        if: matrix.runner == "windows-latest"
+        if: matrix.runner == 'windows-latest'
         run: cargo build --locked --release --target ${{ matrix.target }} --features cliargo build --locked --release --target ${{ matrix.target }} --features cli
 
       - name: Rename binary
