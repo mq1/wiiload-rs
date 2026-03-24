@@ -56,7 +56,7 @@ jobs:
 
       - name: Build binary (windows)
         if: matrix.runner == 'windows-latest'
-        run: cargo build --locked --release --target ${{ matrix.target }} --features cliargo build --locked --release --target ${{ matrix.target }} --features cli
+        run: cargo build --locked --release --target ${{ matrix.target }} --features cli
 
       - name: Rename binary
         run: cp target/${{ matrix.target }}/release/wiiload wiiload-${{ matrix.target }}
