@@ -21,13 +21,13 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
           - target: i686-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
           - target: aarch64-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: ubuntu-22.04-arm
           - target: armv7-unknown-linux-musleabihf
-            runner: ubuntu-latest
+            runner: ubuntu-22.04-arm
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
           - target: i686-pc-windows-msvc
@@ -50,15 +50,26 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build binary
+        run: cargo build --locked --release --target ${{ matrix.target }} --features cli
+
+      - name: Rename binary (unix)
+        if: matrix.runner != 'windows-latest'
         run: |
-          cargo build --locked --release --target ${{ matrix.target }} --features cli
-          cp target/${{ matrix.target }}/release/wiiload wiiload-${{ matrix.target }}
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/wiiload dist/wiiload-${{ matrix.target }}
+
+      - name: Rename binary (windows)
+        if: matrix.runner == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -Path "dist" -ItemType Directory -Force
+          Copy-Item -Path "target\${{ matrix.target }}\release\wiiload.exe" -Destination "dist\wiiload-${{ matrix.target }}.exe"
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.target }}
-          path: wiiload-${{ matrix.target }}
+          path: dist/*
 
   release:
     name: Create GitHub Release
