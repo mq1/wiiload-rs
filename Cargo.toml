@@ -19,6 +19,13 @@ thiserror = "2"
 miniz_oxide = { version = "0.9", optional = true }
 lexopt = { version = "0.3", optional = true }
 
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
 [lints.rust]
 rust_2018_idioms = "deny"
 
