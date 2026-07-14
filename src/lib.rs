@@ -1,8 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use async_io::{Async, Timer};
+use futures_lite::{
+    AsyncWriteExt,
+    future::FutureExt,
+    io::{self, BufWriter},
+};
 use std::{
-    io::{BufWriter, Write},
     net::{Ipv4Addr, SocketAddr, TcpStream},
     time::Duration,
 };
@@ -27,7 +32,7 @@ pub enum WiiloadError {
     FileNameTooLong,
 }
 
-fn push(
+async fn push(
     filename: &str,
     body: &[u8],
     wii_ip: Ipv4Addr,
@@ -44,29 +49,33 @@ fn push(
 
     // Connect to the Wii via tcp
     let mut stream = {
-        let stream = TcpStream::connect_timeout(&wii_addr, WIILOAD_TIMEOUT)?;
-        stream.set_read_timeout(Some(WIILOAD_TIMEOUT))?;
-        stream.set_write_timeout(Some(WIILOAD_TIMEOUT))?;
+        let stream = Async::<TcpStream>::connect(wii_addr)
+            .or(async {
+                Timer::after(WIILOAD_TIMEOUT).await;
+                Err(io::ErrorKind::TimedOut.into())
+            })
+            .await?;
+
         BufWriter::new(stream)
     };
 
     // Send Wiiload header
-    stream.write_all(WIILOAD_MAGIC)?;
-    stream.write_all(&WIILOAD_VERSION[..])?;
-    stream.write_all(&[filename_len])?;
-    stream.write_all(&compressed_size.to_be_bytes())?;
-    stream.write_all(&uncompressed_size.to_be_bytes())?;
+    stream.write_all(WIILOAD_MAGIC).await?;
+    stream.write_all(&WIILOAD_VERSION[..]).await?;
+    stream.write_all(&[filename_len]).await?;
+    stream.write_all(&compressed_size.to_be_bytes()).await?;
+    stream.write_all(&uncompressed_size.to_be_bytes()).await?;
 
     // Send the data
-    stream.write_all(body)?;
+    stream.write_all(body).await?;
 
     // Send arguments
-    stream.write_all(filename.as_bytes())?;
+    stream.write_all(filename.as_bytes()).await?;
     if !filename.ends_with('\0') {
-        stream.write_all(&[0])?;
+        stream.write_all(&[0]).await?;
     }
 
-    stream.flush()?;
+    stream.flush().await?;
 
     Ok(())
 }
@@ -84,12 +93,12 @@ fn push(
 /// * The filename length exceeds `u8::MAX`.
 /// * The TCP connection to the Wii cannot be established or times out.
 /// * An I/O error occurs while writing data to the network stream.
-pub fn send(
+pub async fn send(
     filename: impl AsRef<str>,
     body: impl AsRef<[u8]>,
     wii_ip: impl Into<Ipv4Addr>,
 ) -> Result<(), WiiloadError> {
-    push(filename.as_ref(), body.as_ref(), wii_ip.into(), 0)
+    push(filename.as_ref(), body.as_ref(), wii_ip.into(), 0).await
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
@@ -108,7 +117,7 @@ pub fn send(
 /// * The TCP connection to the Wii cannot be established or times out.
 /// * An I/O error occurs while writing data to the network stream.
 #[cfg(feature = "compression")]
-pub fn compress_then_send(
+pub async fn compress_then_send(
     filename: impl AsRef<str>,
     body: impl AsRef<[u8]>,
     wii_ip: impl Into<Ipv4Addr>,
@@ -125,4 +134,5 @@ pub fn compress_then_send(
         wii_ip.into(),
         uncompressed_size,
     )
+    .await
 }

@@ -44,6 +44,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
 #[cfg(feature = "cli")]
 fn main() -> Result<(), lexopt::Error> {
+    use futures_lite::future::block_on;
     use std::{fs, net::Ipv4Addr, path::Path};
 
     let args = parse_args()?;
@@ -56,14 +57,14 @@ fn main() -> Result<(), lexopt::Error> {
         #[cfg(feature = "compression")]
         {
             println!("Compressing and sending file...");
-            wiiload::compress_then_send(filename, &body, wii_ip).unwrap();
+            block_on(wiiload::compress_then_send(filename, &body, wii_ip)).unwrap();
         }
         #[cfg(not(feature = "compression"))]
         {
             println!("Compression not enabled! Please add the `compression` feature to enable it.");
         }
     } else {
-        wiiload::send(filename, &body, wii_ip).unwrap();
+        block_on(wiiload::send(filename, &body, wii_ip)).unwrap();
     }
 
     Ok(())
