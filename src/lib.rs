@@ -10,6 +10,7 @@ pub const WIILOAD_PORT: u16 = 4299;
 const WIILOAD_MAGIC: [u8; 4] = *b"HAXX";
 const WIILOAD_VERSION_MAJOR: u8 = 0;
 const WIILOAD_VERSION_MINOR: u8 = 5;
+const CHUNK_SIZE: usize = 1024 * 128;
 
 #[derive(Error, Debug)]
 pub enum WiiloadError {
@@ -78,7 +79,9 @@ async fn push<W: AsyncWrite + Unpin>(
     writer.write_all(header.as_bytes()).await?;
 
     // Send the data
-    writer.write_all(body).await?;
+    for chunk in body.chunks(CHUNK_SIZE) {
+        writer.write_all(chunk).await?;
+    }
 
     // Send arguments
     writer.write_all(filename.as_bytes()).await?;
