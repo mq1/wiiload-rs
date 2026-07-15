@@ -3,12 +3,13 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-use futures_lite::{AsyncWrite, AsyncWriteExt, io::BufWriter};
+use futures_lite::{AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
 
 pub const WIILOAD_PORT: u16 = 4299;
-const WIILOAD_MAGIC: &[u8] = b"HAXX";
-const WIILOAD_VERSION: [u8; 3] = [0, 5, 0];
+const WIILOAD_MAGIC: [u8; 4] = *b"HAXX";
+const WIILOAD_VERSION_MAJOR: u8 = 0;
+const WIILOAD_VERSION_MINOR: u8 = 5;
 
 #[derive(Error, Debug)]
 pub enum WiiloadError {
@@ -24,6 +25,38 @@ pub enum WiiloadError {
     FileNameTooLong,
 }
 
+#[repr(C)]
+struct Header {
+    magic: [u8; 4],
+    version_major: u8,
+    version_minor: u8,
+    filename_len: u16,
+    compressed_size: u32,
+    uncompressed_size: u32,
+}
+
+impl Header {
+    fn new(filename_len: u16, compressed_size: u32, uncompressed_size: u32) -> Self {
+        Self {
+            magic: WIILOAD_MAGIC,
+            version_major: WIILOAD_VERSION_MAJOR,
+            version_minor: WIILOAD_VERSION_MINOR,
+            filename_len: filename_len.to_be(),
+            compressed_size: compressed_size.to_be(),
+            uncompressed_size: uncompressed_size.to_be(),
+        }
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                &self as *const _ as *const u8,
+                std::mem::size_of::<Header>(),
+            )
+        }
+    }
+}
+
 async fn push<W: AsyncWrite + Unpin>(
     writer: &mut W,
     filename: &str,
@@ -35,20 +68,14 @@ async fn push<W: AsyncWrite + Unpin>(
         .try_into()
         .map_err(|_| WiiloadError::FileTooBig)?;
 
-    let filename_len: u8 = filename
+    let filename_len: u16 = filename
         .len()
         .try_into()
         .map_err(|_| WiiloadError::FileNameTooLong)?;
 
-    // Buffered writes
-    let mut writer = BufWriter::new(writer);
-
     // Send Wiiload header
-    writer.write_all(WIILOAD_MAGIC).await?;
-    writer.write_all(&WIILOAD_VERSION[..]).await?;
-    writer.write_all(&[filename_len]).await?;
-    writer.write_all(&compressed_size.to_be_bytes()).await?;
-    writer.write_all(&uncompressed_size.to_be_bytes()).await?;
+    let header = Header::new(filename_len, compressed_size, uncompressed_size);
+    writer.write_all(header.as_bytes()).await?;
 
     // Send the data
     writer.write_all(body).await?;
