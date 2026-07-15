@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![warn(clippy::all, rust_2018_idioms)]
+
 #[cfg(feature = "cli")]
 struct Args {
     file: String,
@@ -44,8 +46,12 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
 #[cfg(feature = "cli")]
 fn main() -> Result<(), lexopt::Error> {
-    use futures_lite::future::block_on;
-    use std::{fs, net::Ipv4Addr, path::Path};
+    use async_net::TcpStream;
+    use std::{
+        fs,
+        net::{Ipv4Addr, SocketAddr},
+        path::Path,
+    };
 
     let args = parse_args()?;
     let file_path = Path::new(&args.file);
@@ -53,19 +59,29 @@ fn main() -> Result<(), lexopt::Error> {
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_string();
     let wii_ip: Ipv4Addr = args.wii_ip.parse().unwrap();
 
-    if args.compress {
-        #[cfg(feature = "compression")]
-        {
-            println!("Compressing and sending file...");
-            block_on(wiiload::compress_then_send(filename, &body, wii_ip)).unwrap();
+    futures_lite::future::block_on(async move {
+        let addr = SocketAddr::from((wii_ip, wiiload::WIILOAD_PORT));
+        let mut conn = TcpStream::connect(addr).await.unwrap();
+
+        if args.compress {
+            #[cfg(feature = "compression")]
+            {
+                println!("Compressing and sending file...");
+                wiiload::compress_then_send(&mut conn, filename, &body)
+                    .await
+                    .unwrap();
+            }
+            #[cfg(not(feature = "compression"))]
+            {
+                println!(
+                    "Compression not enabled! Please add the `compression` feature to enable it."
+                );
+            }
+        } else {
+            println!("Sending file...");
+            wiiload::send(&mut conn, filename, &body).await.unwrap();
         }
-        #[cfg(not(feature = "compression"))]
-        {
-            println!("Compression not enabled! Please add the `compression` feature to enable it.");
-        }
-    } else {
-        block_on(wiiload::send(filename, &body, wii_ip)).unwrap();
-    }
+    });
 
     Ok(())
 }
