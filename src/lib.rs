@@ -20,9 +20,9 @@ pub enum WiiloadError {
     Net(#[from] std::net::AddrParseError),
     #[error("Timeout")]
     Timeout,
-    #[error("File too big")]
+    #[error("File > 4 GiB")]
     FileTooBig,
-    #[error("Filename too long")]
+    #[error("Filename > 255 bytes")]
     FileNameTooLong,
 }
 
@@ -69,13 +69,12 @@ async fn push<W: AsyncWrite + Unpin>(
         .try_into()
         .map_err(|_| WiiloadError::FileTooBig)?;
 
-    let filename_len: u16 = filename
-        .len()
-        .try_into()
-        .map_err(|_| WiiloadError::FileNameTooLong)?;
+    if filename.len() > 255 {
+        return Err(WiiloadError::FileNameTooLong);
+    }
 
     // Send Wiiload header
-    let header = Header::new(filename_len, compressed_size, uncompressed_size);
+    let header = Header::new(filename.len() as u16, compressed_size, uncompressed_size);
     writer.write_all(header.as_bytes()).await?;
 
     // Send the data
@@ -83,13 +82,10 @@ async fn push<W: AsyncWrite + Unpin>(
         writer.write_all(chunk).await?;
     }
 
-    // Send arguments
-    writer.write_all(filename.as_bytes()).await?;
-    if !filename.ends_with('\0') {
-        writer.write_all(&[0]).await?;
-    }
-
-    writer.flush().await?;
+    // Send filename with null terminator
+    let mut buf = [0u8; 256];
+    buf[..filename.len()].copy_from_slice(filename.as_bytes());
+    writer.write_all(&buf[..filename.len() + 1]).await?;
 
     Ok(())
 }
