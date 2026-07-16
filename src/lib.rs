@@ -60,7 +60,7 @@ impl Header {
 
 async fn push<W: AsyncWrite + Unpin>(
     writer: &mut W,
-    filename: &str,
+    mut filename: String,
     body: &[u8],
     uncompressed_size: u32,
 ) -> Result<(), WiiloadError> {
@@ -69,12 +69,13 @@ async fn push<W: AsyncWrite + Unpin>(
         .try_into()
         .map_err(|_| WiiloadError::FileTooBig)?;
 
-    if filename.len() > 255 {
-        return Err(WiiloadError::FileNameTooLong);
-    }
+    let filename_len = filename
+        .len()
+        .try_into()
+        .map_err(|_| WiiloadError::FileNameTooLong)?;
 
     // Send Wiiload header
-    let header = Header::new(filename.len() as u16, compressed_size, uncompressed_size);
+    let header = Header::new(filename_len, compressed_size, uncompressed_size);
     writer.write_all(header.as_bytes()).await?;
 
     // Send the data
@@ -83,9 +84,10 @@ async fn push<W: AsyncWrite + Unpin>(
     }
 
     // Send filename with null terminator
-    let mut buf = [0u8; 256];
-    buf[..filename.len()].copy_from_slice(filename.as_bytes());
-    writer.write_all(&buf[..filename.len() + 1]).await?;
+    if !filename.ends_with('\0') {
+        filename.push('\0');
+    }
+    writer.write_all(filename.as_bytes()).await?;
 
     Ok(())
 }
@@ -93,10 +95,10 @@ async fn push<W: AsyncWrite + Unpin>(
 /// Sends a file to the Wii without applying any compression.
 pub async fn send<W: AsyncWrite + Unpin>(
     writer: &mut W,
-    filename: impl AsRef<str>,
+    filename: impl Into<String>,
     body: impl AsRef<[u8]>,
 ) -> Result<(), WiiloadError> {
-    push(writer, filename.as_ref(), body.as_ref(), 0).await
+    push(writer, filename.into(), body.as_ref(), 0).await
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
@@ -104,23 +106,17 @@ pub async fn send<W: AsyncWrite + Unpin>(
 #[cfg(feature = "compression")]
 pub async fn compress_then_send<W: AsyncWrite + Unpin>(
     writer: &mut W,
-    filename: impl AsRef<str>,
+    filename: impl Into<String>,
     body: impl AsRef<[u8]>,
 ) -> Result<(), WiiloadError> {
-    use miniz_oxide::deflate::compress_to_vec_zlib;
-
     let body = body.as_ref();
+
     let uncompressed_size = body
         .len()
         .try_into()
         .map_err(|_| WiiloadError::FileTooBig)?;
-    let compressed_body = compress_to_vec_zlib(body, 9);
 
-    push(
-        writer,
-        filename.as_ref(),
-        &compressed_body,
-        uncompressed_size,
-    )
-    .await
+    let compressed_body = miniz_oxide::deflate::compress_to_vec_zlib(body, 9);
+
+    push(writer, filename.into(), &compressed_body, uncompressed_size).await
 }
