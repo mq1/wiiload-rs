@@ -8,8 +8,7 @@ use thiserror::Error;
 
 pub const WIILOAD_PORT: u16 = 4299;
 const WIILOAD_MAGIC: [u8; 4] = *b"HAXX";
-const WIILOAD_VERSION_MAJOR: u8 = 0;
-const WIILOAD_VERSION_MINOR: u8 = 5;
+const WIILOAD_VERSION: [u8; 2] = [0, 5];
 const CHUNK_SIZE: usize = 1024 * 128;
 
 #[derive(Error, Debug)]
@@ -26,36 +25,16 @@ pub enum WiiloadError {
     FileNameTooLong,
 }
 
-#[repr(C)]
-struct Header {
-    magic: [u8; 4],
-    version_major: u8,
-    version_minor: u8,
-    filename_len: u16,
-    compressed_size: u32,
-    uncompressed_size: u32,
-}
+fn make_header(filename_len: u16, compressed_size: u32, uncompressed_size: u32) -> [u8; 16] {
+    let mut buf = [0u8; 16];
 
-impl Header {
-    fn new(filename_len: u16, compressed_size: u32, uncompressed_size: u32) -> Self {
-        Self {
-            magic: WIILOAD_MAGIC,
-            version_major: WIILOAD_VERSION_MAJOR,
-            version_minor: WIILOAD_VERSION_MINOR,
-            filename_len: filename_len.to_be(),
-            compressed_size: compressed_size.to_be(),
-            uncompressed_size: uncompressed_size.to_be(),
-        }
-    }
+    buf[0..4].copy_from_slice(&WIILOAD_MAGIC);
+    buf[4..6].copy_from_slice(&WIILOAD_VERSION);
+    buf[6..8].copy_from_slice(&filename_len.to_be_bytes());
+    buf[8..12].copy_from_slice(&compressed_size.to_be_bytes());
+    buf[12..16].copy_from_slice(&uncompressed_size.to_be_bytes());
 
-    fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                &self as *const _ as *const u8,
-                std::mem::size_of::<Header>(),
-            )
-        }
-    }
+    buf
 }
 
 async fn push<W: AsyncWrite + Unpin>(
@@ -75,8 +54,8 @@ async fn push<W: AsyncWrite + Unpin>(
         .map_err(|_| WiiloadError::FileNameTooLong)?;
 
     // Send Wiiload header
-    let header = Header::new(filename_len, compressed_size, uncompressed_size);
-    writer.write_all(header.as_bytes()).await?;
+    let header = make_header(filename_len, compressed_size, uncompressed_size);
+    writer.write_all(&header).await?;
 
     // Send the data
     for chunk in body.chunks(CHUNK_SIZE) {
