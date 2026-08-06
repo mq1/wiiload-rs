@@ -53,17 +53,15 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
 #[cfg(feature = "cli")]
 fn main() -> Result<(), lexopt::Error> {
-    use async_net::TcpStream;
-    use std::{fs, path::Path};
-
     let args = parse_args()?;
-    let file_path = Path::new(&args.file);
-    let body = fs::read(file_path).unwrap();
-    let filename = file_path.file_name().unwrap().to_str().unwrap().to_string();
-    let addr = (args.wii_ip, args.wii_port);
 
-    futures_lite::future::block_on(async move {
-        let mut conn = TcpStream::connect(addr).await.unwrap();
+    futures::executor::block_on(async move {
+        let file_path = std::path::Path::new(&args.file);
+        let body = std::fs::read(file_path).unwrap();
+        let filename = file_path.file_name().unwrap().to_str().unwrap().to_string();
+
+        let conn = std::net::TcpStream::connect((args.wii_ip, args.wii_port)).unwrap();
+        let mut conn = futures::io::AllowStdIo::new(conn);
 
         if args.compress {
             #[cfg(feature = "compression")]

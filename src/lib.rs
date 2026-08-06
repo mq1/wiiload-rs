@@ -3,7 +3,7 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-use futures_lite::{AsyncWrite, AsyncWriteExt};
+use futures::{AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
 
 pub const WIILOAD_PORT: u16 = 4299;
