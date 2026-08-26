@@ -11,12 +11,13 @@ description = "A minimal wiiload implementation in rust"
 
 [features]
 default = ["compression"]
+async = ["dep:futures-lite"]
 compression = ["dep:miniz_oxide"]
-cli = ["dep:lexopt", "futures/executor"]
+cli = ["dep:lexopt"]
 
 [dependencies]
 thiserror = "2"
-futures = { version = "0.3", features = ["std"] }
+futures-lite = { version = "2", optional = true }
 miniz_oxide = { version = "0.9", optional = true }
 lexopt = { version = "0.3", optional = true }
 

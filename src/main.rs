@@ -55,33 +55,26 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 fn main() -> Result<(), lexopt::Error> {
     let args = parse_args()?;
 
-    futures::executor::block_on(async move {
-        let file_path = std::path::Path::new(&args.file);
-        let body = std::fs::read(file_path).unwrap();
-        let filename = file_path.file_name().unwrap().to_str().unwrap().to_string();
+    let file_path = std::path::Path::new(&args.file);
+    let body = std::fs::read(file_path).unwrap();
+    let filename = file_path.file_name().unwrap().to_str().unwrap();
 
-        let conn = std::net::TcpStream::connect((args.wii_ip, args.wii_port)).unwrap();
-        let mut conn = futures::io::AllowStdIo::new(conn);
+    let mut conn = std::net::TcpStream::connect((args.wii_ip, args.wii_port)).unwrap();
 
-        if args.compress {
-            #[cfg(feature = "compression")]
-            {
-                println!("Compressing and sending file...");
-                wiiload::compress_then_send(&mut conn, filename, &body)
-                    .await
-                    .unwrap();
-            }
-            #[cfg(not(feature = "compression"))]
-            {
-                println!(
-                    "Compression not enabled! Please add the `compression` feature to enable it."
-                );
-            }
-        } else {
-            println!("Sending file...");
-            wiiload::send(&mut conn, filename, &body).await.unwrap();
+    if args.compress {
+        #[cfg(feature = "compression")]
+        {
+            println!("Compressing and sending file...");
+            wiiload::compress_then_send(&mut conn, filename, &body).unwrap();
         }
-    });
+        #[cfg(not(feature = "compression"))]
+        {
+            println!("Compression not enabled! Please add the `compression` feature to enable it.");
+        }
+    } else {
+        println!("Sending file...");
+        wiiload::send(&mut conn, filename, &body).unwrap();
+    }
 
     Ok(())
 }
