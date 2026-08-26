@@ -1,6 +1,6 @@
 [package]
 name = "wiiload"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -11,11 +11,13 @@ description = "A minimal wiiload implementation in rust"
 
 [features]
 default = ["compression"]
+async = ["dep:futures-lite"]
 compression = ["dep:miniz_oxide"]
 cli = ["dep:lexopt"]
 
 [dependencies]
 thiserror = "2"
+futures-lite = { version = "2", optional = true }
 miniz_oxide = { version = "0.9", optional = true }
 lexopt = { version = "0.3", optional = true }
 
@@ -25,10 +27,3 @@ lto = true
 codegen-units = 1
 strip = true
 panic = "abort"
-
-[lints.rust]
-rust_2018_idioms = "deny"
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
