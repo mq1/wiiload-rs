@@ -8,22 +8,22 @@ const WIILOAD_MAGIC: [u8; 4] = *b"HAXX";
 const WIILOAD_VERSION: [u8; 2] = [0, 5];
 const CHUNK_SIZE: usize = 1024 * 128;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum WiiloadError {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Network error: {0}")]
-    Net(#[from] std::net::AddrParseError),
-
-    #[error("Timeout")]
-    Timeout,
+    Io(std::io::ErrorKind),
 
     #[error("File > 4 GiB")]
     FileTooBig,
 
     #[error("Filename > 255 bytes")]
     FileNameTooLong,
+}
+
+impl From<std::io::Error> for WiiloadError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err.kind())
+    }
 }
 
 fn make_header(filename_len: usize, compressed_size: usize, uncompressed_size: u32) -> [u8; 16] {
