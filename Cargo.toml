@@ -10,7 +10,7 @@ homepage = "https://github.com/mq1/wiiload-rs"
 description = "A minimal wiiload implementation in rust"
 
 [features]
-default = ["compression", "async"]
+default = ["compression"]
 async = ["dep:futures-lite", "dep:async-fs"]
 compression = ["dep:flate2", "dep:tempfile"]
 cli = ["dep:lexopt"]
