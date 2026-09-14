@@ -1,6 +1,6 @@
 [package]
 name = "wiiload"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -10,15 +10,17 @@ homepage = "https://github.com/mq1/wiiload-rs"
 description = "A minimal wiiload implementation in rust"
 
 [features]
-default = ["compression"]
-async = ["dep:futures-lite"]
-compression = ["dep:miniz_oxide"]
+default = ["compression", "async"]
+async = ["dep:futures-lite", "dep:async-fs"]
+compression = ["dep:flate2", "dep:tempfile"]
 cli = ["dep:lexopt"]
 
 [dependencies]
 thiserror = "2"
 futures-lite = { version = "2", optional = true }
-miniz_oxide = { version = "0.9", optional = true }
+async-fs = { version = "2", optional = true }
+flate2 = { version = "1", optional = true }
+tempfile = { version = "3", optional = true }
 lexopt = { version = "0.3", optional = true }
 
 [profile.release]

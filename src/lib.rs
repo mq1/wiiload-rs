@@ -16,7 +16,7 @@ pub enum WiiloadError {
     #[error("File > 4 GiB")]
     FileTooBig,
 
-    #[error("Filename > 255 bytes")]
+    #[error("Filename > 255")]
     FileNameTooLong,
 }
 
@@ -26,16 +26,29 @@ impl From<std::io::Error> for WiiloadError {
     }
 }
 
-fn make_header(filename_len: usize, compressed_size: usize, uncompressed_size: u32) -> [u8; 16] {
+fn make_header(
+    filename_len: usize,
+    compressed_size: usize,
+    uncompressed_size: usize,
+) -> Result<[u8; 16], WiiloadError> {
+    if filename_len > 255 {
+        return Err(WiiloadError::FileNameTooLong);
+    }
+
+    let filename_len = filename_len as u16;
+    let compressed_size = u32::try_from(compressed_size).map_err(|_| WiiloadError::FileTooBig)?;
+    let uncompressed_size =
+        u32::try_from(uncompressed_size).map_err(|_| WiiloadError::FileTooBig)?;
+
     let mut buf = [0u8; 16];
 
     buf[0..4].copy_from_slice(&WIILOAD_MAGIC);
     buf[4..6].copy_from_slice(&WIILOAD_VERSION);
-    buf[6..8].copy_from_slice(&(filename_len as u16).to_be_bytes());
-    buf[8..12].copy_from_slice(&(compressed_size as u32).to_be_bytes());
+    buf[6..8].copy_from_slice(&filename_len.to_be_bytes());
+    buf[8..12].copy_from_slice(&compressed_size.to_be_bytes());
     buf[12..16].copy_from_slice(&uncompressed_size.to_be_bytes());
 
-    buf
+    Ok(buf)
 }
 
 fn null_terminated_filename(filename: &str) -> ([u8; 256], usize) {
@@ -47,20 +60,22 @@ fn null_terminated_filename(filename: &str) -> ([u8; 256], usize) {
     (buf, filename.len() + 1)
 }
 
-fn push<W: std::io::Write>(
+fn push<R: std::io::Read, W: std::io::Write>(
     writer: &mut W,
     filename: &str,
-    body: &[u8],
-    uncompressed_size: u32,
+    body: &mut R,
+    compressed_size: usize,
+    uncompressed_size: usize,
 ) -> Result<(), WiiloadError> {
+    use std::io::Write;
+
     // Send Wiiload header
-    let header = make_header(filename.len(), body.len(), uncompressed_size);
+    let header = make_header(filename.len(), compressed_size, uncompressed_size)?;
     writer.write_all(&header)?;
 
     // Send the data
-    for chunk in body.chunks(CHUNK_SIZE) {
-        writer.write_all(chunk)?;
-    }
+    let mut writer = std::io::BufWriter::with_capacity(CHUNK_SIZE, writer);
+    std::io::copy(body, &mut writer)?;
 
     // Send filename with null terminator
     let (filename, len) = null_terminated_filename(filename);
@@ -70,22 +85,22 @@ fn push<W: std::io::Write>(
 }
 
 #[cfg(feature = "async")]
-async fn push_async<W: futures_lite::AsyncWrite + Unpin>(
+async fn push_async<R: futures_lite::AsyncRead + Unpin, W: futures_lite::AsyncWrite + Unpin>(
     writer: &mut W,
     filename: &str,
-    body: &[u8],
-    uncompressed_size: u32,
+    body: &mut R,
+    compressed_size: usize,
+    uncompressed_size: usize,
 ) -> Result<(), WiiloadError> {
     use futures_lite::AsyncWriteExt;
 
     // Send Wiiload header
-    let header = make_header(filename.len(), body.len(), uncompressed_size);
+    let header = make_header(filename.len(), compressed_size, uncompressed_size)?;
     writer.write_all(&header).await?;
 
     // Send the data
-    for chunk in body.chunks(CHUNK_SIZE) {
-        writer.write_all(chunk).await?;
-    }
+    let mut writer = futures_lite::io::BufWriter::with_capacity(CHUNK_SIZE, writer);
+    futures_lite::io::copy(body, &mut writer).await?;
 
     // Send filename with null terminator
     let (filename, len) = null_terminated_filename(filename);
@@ -94,81 +109,90 @@ async fn push_async<W: futures_lite::AsyncWrite + Unpin>(
     Ok(())
 }
 
-fn check(filename: &str, body: &[u8]) -> Result<(), WiiloadError> {
-    if filename.len() > 255 {
-        return Err(WiiloadError::FileNameTooLong);
-    }
-
-    if body.len() > u32::MAX as usize {
-        return Err(WiiloadError::FileTooBig);
-    }
-
-    Ok(())
-}
-
 /// Sends a file to the Wii without applying any compression.
-pub fn send<W: std::io::Write>(
+pub fn send<R: std::io::Read, W: std::io::Write>(
     writer: &mut W,
     filename: impl AsRef<str>,
-    body: impl AsRef<[u8]>,
+    body: &mut R,
+    compressed_size: usize,
 ) -> Result<(), WiiloadError> {
-    let filename = filename.as_ref();
-    let body = body.as_ref();
-
-    check(filename, body)?;
-    push(writer, filename, body, 0)
+    push(writer, filename.as_ref(), body, compressed_size, 0)
 }
 
 #[cfg(feature = "async")]
 /// Sends a file to the Wii without applying any compression.
-pub async fn send_async<W: futures_lite::AsyncWrite + Unpin>(
+pub async fn send_async<R: futures_lite::AsyncRead + Unpin, W: futures_lite::AsyncWrite + Unpin>(
     writer: &mut W,
     filename: impl AsRef<str>,
-    body: impl AsRef<[u8]>,
+    body: &mut R,
+    compressed_size: usize,
 ) -> Result<(), WiiloadError> {
-    let filename = filename.as_ref();
-    let body = body.as_ref();
-
-    check(filename, body)?;
-    push_async(writer, filename, body, 0).await
+    push_async(writer, filename.as_ref(), body, compressed_size, 0).await
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
 /// Uses deflate -9 to minimize network transfer time.
 #[cfg(feature = "compression")]
-pub fn compress_then_send<W: std::io::Write>(
+pub fn compress_then_send<R: std::io::Read, W: std::io::Write>(
     writer: &mut W,
     filename: impl AsRef<str>,
-    body: impl AsRef<[u8]>,
+    body: &mut R,
 ) -> Result<(), WiiloadError> {
-    let filename = filename.as_ref();
-    let body = body.as_ref();
+    use std::io::Seek;
 
-    check(filename, body)?;
+    let mut tmp =
+        flate2::write::ZlibEncoder::new(tempfile::tempfile()?, flate2::Compression::best());
+    let uncompressed_size =
+        usize::try_from(std::io::copy(body, &mut tmp)?).map_err(|_| WiiloadError::FileTooBig)?;
+    let mut tmp = tmp.finish()?;
+    tmp.rewind()?;
 
-    let uncompressed_size = body.len() as u32;
+    let compressed_size =
+        usize::try_from(tmp.metadata()?.len()).map_err(|_| WiiloadError::FileTooBig)?;
 
-    let compressed_body = miniz_oxide::deflate::compress_to_vec_zlib(body, 9);
-
-    push(writer, filename, &compressed_body, uncompressed_size)
+    push(
+        writer,
+        filename.as_ref(),
+        &mut tmp,
+        compressed_size,
+        uncompressed_size,
+    )
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
 /// Uses deflate -9 to minimize network transfer time.
 #[cfg(all(feature = "compression", feature = "async"))]
-pub async fn compress_then_send_async<W: futures_lite::AsyncWrite + Unpin>(
+pub async fn compress_then_send_async<
+    R: futures_lite::AsyncRead + Unpin,
+    W: futures_lite::AsyncWrite + Unpin,
+>(
     writer: &mut W,
     filename: impl AsRef<str>,
-    body: impl AsRef<[u8]>,
+    body: &mut R,
 ) -> Result<(), WiiloadError> {
-    let filename = filename.as_ref();
-    let body = body.as_ref();
+    use futures_lite::AsyncSeekExt;
 
-    check(filename, body)?;
+    let mut tmp =
+        flate2::write::ZlibEncoder::new(tempfile::tempfile()?, flate2::Compression::best());
+    let uncompressed_size = usize::try_from(std::io::copy(
+        &mut futures_lite::io::BlockOn::new(body),
+        &mut tmp,
+    )?)
+    .map_err(|_| WiiloadError::FileTooBig)?;
+    let tmp = tmp.finish()?;
 
-    let uncompressed_size = body.len() as u32;
+    let mut tmp = async_fs::File::from(tmp);
+    tmp.seek(std::io::SeekFrom::Start(0)).await?;
 
-    let compressed_body = miniz_oxide::deflate::compress_to_vec_zlib(body, 9);
+    let compressed_size =
+        usize::try_from(tmp.metadata().await?.len()).map_err(|_| WiiloadError::FileTooBig)?;
 
-    push_async(writer, filename.into(), &compressed_body, uncompressed_size).await
+    push_async(
+        writer,
+        filename.as_ref(),
+        &mut tmp,
+        compressed_size,
+        uncompressed_size,
+    )
+    .await
 }
