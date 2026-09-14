@@ -114,9 +114,9 @@ pub fn send<R: std::io::Read, W: std::io::Write>(
     writer: &mut W,
     filename: impl AsRef<str>,
     body: &mut R,
-    compressed_size: usize,
+    size: usize,
 ) -> Result<(), WiiloadError> {
-    push(writer, filename.as_ref(), body, compressed_size, 0)
+    push(writer, filename.as_ref(), body, size, 0)
 }
 
 #[cfg(feature = "async")]
@@ -125,9 +125,9 @@ pub async fn send_async<R: futures_lite::AsyncRead + Unpin, W: futures_lite::Asy
     writer: &mut W,
     filename: impl AsRef<str>,
     body: &mut R,
-    compressed_size: usize,
+    size: usize,
 ) -> Result<(), WiiloadError> {
-    push_async(writer, filename.as_ref(), body, compressed_size, 0).await
+    push_async(writer, filename.as_ref(), body, size, 0).await
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
