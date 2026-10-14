@@ -62,6 +62,7 @@ fn push<R: std::io::Read, W: std::io::Write>(
     Ok(())
 }
 
+#[cfg(feature = "compression")]
 fn push_slice<W: std::io::Write>(
     writer: &mut W,
     filename: &str,
@@ -108,7 +109,7 @@ async fn push_async<R: futures_lite::AsyncRead + Unpin, W: futures_lite::AsyncWr
     Ok(())
 }
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", feature = "compression-async"))]
 async fn push_slice_async<W: futures_lite::AsyncWrite + Unpin>(
     writer: &mut W,
     filename: &str,
