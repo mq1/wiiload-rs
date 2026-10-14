@@ -65,7 +65,8 @@ fn main() -> Result<(), lexopt::Error> {
         #[cfg(feature = "compression")]
         {
             println!("Compressing and sending file...");
-            wiiload::compress_then_send(&mut conn, filename, &mut body).unwrap();
+            let mut reader = std::io::BufReader::new(&mut body);
+            wiiload::compress_then_send(&mut conn, filename, &mut reader).unwrap();
         }
         #[cfg(not(feature = "compression"))]
         {
