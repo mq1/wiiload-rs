@@ -54,7 +54,6 @@ fn push<R: std::io::Read, W: std::io::Write>(
     Ok(())
 }
 
-#[cfg(feature = "async")]
 fn push_slice<W: std::io::Write>(
     writer: &mut W,
     filename: &str,
