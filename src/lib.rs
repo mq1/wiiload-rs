@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![warn(clippy::all, rust_2018_idioms)]
+#![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub const WIILOAD_PORT: u16 = 4299;
 const EMPTY_HEADER: [u8; 16] = [b'H', b'A', b'X', b'X', 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -32,10 +34,10 @@ fn make_header(
     Ok(header)
 }
 
-fn push<R: std::io::Read, W: std::io::Write>(
-    writer: &mut W,
+fn push(
+    writer: &mut dyn std::io::Write,
     filename: &str,
-    body: &mut R,
+    body: &mut dyn std::io::Read,
     compressed_size: usize,
     uncompressed_size: usize,
 ) -> std::io::Result<()> {
@@ -54,8 +56,8 @@ fn push<R: std::io::Read, W: std::io::Write>(
     Ok(())
 }
 
-fn push_slice<W: std::io::Write>(
-    writer: &mut W,
+fn push_slice(
+    writer: &mut dyn std::io::Write,
     filename: &str,
     body: &[u8],
     uncompressed_size: usize,
@@ -75,11 +77,12 @@ fn push_slice<W: std::io::Write>(
     Ok(())
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 #[cfg(feature = "async")]
-async fn push_async<R: futures_lite::AsyncRead + Unpin, W: futures_lite::AsyncWrite + Unpin>(
-    writer: &mut W,
+async fn push_async(
+    writer: &mut (impl futures_lite::AsyncWrite + Unpin),
     filename: &str,
-    body: &mut R,
+    body: &mut (impl futures_lite::AsyncRead + Unpin),
     compressed_size: usize,
     uncompressed_size: usize,
 ) -> std::io::Result<()> {
@@ -100,9 +103,10 @@ async fn push_async<R: futures_lite::AsyncRead + Unpin, W: futures_lite::AsyncWr
     Ok(())
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 #[cfg(feature = "async")]
-async fn push_slice_async<W: futures_lite::AsyncWrite + Unpin>(
-    writer: &mut W,
+async fn push_slice_async(
+    writer: &mut (impl futures_lite::AsyncWrite + Unpin),
     filename: &str,
     body: &[u8],
     uncompressed_size: usize,
@@ -125,52 +129,55 @@ async fn push_slice_async<W: futures_lite::AsyncWrite + Unpin>(
 }
 
 /// Sends a file to the Wii without applying any compression.
-pub fn send<R: std::io::Read, W: std::io::Write>(
-    writer: &mut W,
+pub fn send(
+    mut writer: impl std::io::Write,
     filename: impl AsRef<str>,
-    body: &mut R,
+    mut body: impl std::io::Read,
     size: usize,
 ) -> std::io::Result<()> {
-    push(writer, filename.as_ref(), body, size, 0)
+    push(&mut writer, filename.as_ref(), &mut body, size, 0)
 }
 
 /// Sends a file to the Wii without applying any compression.
-pub fn send_slice<W: std::io::Write>(
-    writer: &mut W,
+pub fn send_slice(
+    mut writer: impl std::io::Write,
     filename: impl AsRef<str>,
-    body: &[u8],
+    body: impl AsRef<[u8]>,
 ) -> std::io::Result<()> {
-    push_slice(writer, filename.as_ref(), body, 0)
+    push_slice(&mut writer, filename.as_ref(), body.as_ref(), 0)
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 #[cfg(feature = "async")]
 /// Sends a file to the Wii without applying any compression.
-pub async fn send_async<R: futures_lite::AsyncRead + Unpin, W: futures_lite::AsyncWrite + Unpin>(
-    writer: &mut W,
+pub async fn send_async(
+    mut writer: impl futures_lite::AsyncWrite + Unpin,
     filename: impl AsRef<str>,
-    body: &mut R,
+    mut body: impl futures_lite::AsyncRead + Unpin,
     size: usize,
 ) -> std::io::Result<()> {
-    push_async(writer, filename.as_ref(), body, size, 0).await
+    push_async(&mut writer, filename.as_ref(), &mut body, size, 0).await
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 #[cfg(feature = "async")]
 /// Sends a file to the Wii without applying any compression.
-pub async fn send_slice_async<W: futures_lite::AsyncWrite + Unpin>(
-    writer: &mut W,
+pub async fn send_slice_async(
+    mut writer: impl futures_lite::AsyncWrite + Unpin,
     filename: impl AsRef<str>,
-    body: &[u8],
+    body: impl AsRef<[u8]>,
 ) -> std::io::Result<()> {
-    push_slice_async(writer, filename.as_ref(), body, 0).await
+    push_slice_async(&mut writer, filename.as_ref(), body.as_ref(), 0).await
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
 /// Uses deflate -9 to minimize network transfer time.
+#[cfg_attr(docsrs, doc(cfg(feature = "compression")))]
 #[cfg(feature = "compression")]
-pub fn compress_then_send<R: std::io::BufRead, W: std::io::Write>(
-    writer: &mut W,
+pub fn compress_then_send(
+    mut writer: impl std::io::Write,
     filename: impl AsRef<str>,
-    body: &mut R,
+    body: impl std::io::BufRead,
 ) -> std::io::Result<()> {
     use std::io::Read;
 
@@ -183,7 +190,7 @@ pub fn compress_then_send<R: std::io::BufRead, W: std::io::Write>(
         .map_err(|_| std::io::Error::from(std::io::ErrorKind::FileTooLarge))?;
 
     push_slice(
-        writer,
+        &mut writer,
         filename.as_ref(),
         compressed_body.as_ref(),
         uncompressed_size,
@@ -192,25 +199,24 @@ pub fn compress_then_send<R: std::io::BufRead, W: std::io::Write>(
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
 /// Uses deflate -9 to minimize network transfer time.
+#[cfg_attr(docsrs, doc(cfg(feature = "compression")))]
 #[cfg(feature = "compression")]
-pub fn compress_then_send_slice<W: std::io::Write>(
-    writer: &mut W,
+pub fn compress_then_send_slice(
+    mut writer: impl std::io::Write,
     filename: impl AsRef<str>,
-    mut body: &[u8],
+    body: impl AsRef<[u8]>,
 ) -> std::io::Result<()> {
-    compress_then_send(writer, filename, &mut body)
+    compress_then_send(&mut writer, filename, body.as_ref())
 }
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
 /// Uses deflate -9 to minimize network transfer time.
+#[cfg_attr(docsrs, doc(cfg(feature = "compression-async")))]
 #[cfg(feature = "compression-async")]
-pub async fn compress_then_send_async<
-    R: futures_lite::AsyncBufRead + Unpin,
-    W: futures_lite::AsyncWrite + Unpin,
->(
-    writer: &mut W,
+pub async fn compress_then_send_async(
+    mut writer: impl futures_lite::AsyncWrite + Unpin,
     filename: impl AsRef<str>,
-    body: &mut R,
+    body: impl futures_lite::AsyncBufRead + Unpin,
 ) -> std::io::Result<()> {
     use futures_lite::AsyncReadExt;
 
@@ -226,7 +232,7 @@ pub async fn compress_then_send_async<
         .map_err(|_| std::io::Error::from(std::io::ErrorKind::FileTooLarge))?;
 
     push_slice_async(
-        writer,
+        &mut writer,
         filename.as_ref(),
         compressed_body.as_ref(),
         uncompressed_size,
@@ -236,11 +242,12 @@ pub async fn compress_then_send_async<
 
 /// Compresses the file data using Zlib and then sends it to the Wii.
 /// Uses deflate -9 to minimize network transfer time.
+#[cfg_attr(docsrs, doc(cfg(feature = "compression-async")))]
 #[cfg(feature = "compression-async")]
-pub async fn compress_then_send_slice_async<W: futures_lite::AsyncWrite + Unpin>(
-    writer: &mut W,
+pub async fn compress_then_send_slice_async(
+    writer: impl futures_lite::AsyncWrite + Unpin,
     filename: impl AsRef<str>,
-    mut body: &[u8],
+    body: impl AsRef<[u8]>,
 ) -> std::io::Result<()> {
-    compress_then_send_async(writer, filename, &mut body).await
+    compress_then_send_async(writer, filename, body.as_ref()).await
 }

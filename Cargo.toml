@@ -1,6 +1,6 @@
 [package]
 name = "wiiload"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -11,9 +11,10 @@ description = "A minimal wiiload implementation in rust"
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = []
+default = ["compression-async", "compression", "cli"]
 async = ["dep:futures-lite"]
 compression = ["dep:flate2"]
 compression-async = ["async", "dep:async-compression"]

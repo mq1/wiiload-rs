@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![warn(clippy::all, rust_2018_idioms)]
+#![forbid(unsafe_code)]
 
 #[cfg(feature = "cli")]
 struct Args {
