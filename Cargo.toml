@@ -14,7 +14,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["compression-async", "compression", "cli"]
+default = []
 async = ["dep:futures-lite"]
 compression = ["dep:flate2"]
 compression-async = ["async", "dep:async-compression"]
